@@ -152,6 +152,25 @@ function h5gen(h::Quantica.Hamiltonian, c::Configuration, ss::T, modification = 
             grpc_p["Temperature"] =  [s.temperature/energy_scale] # KPM rescaled
             grpc_p["Direction"] = [Int(s.direction)]
             grpc_p["Special"] = [Int(s.special)]
+
+        elseif isa(s, Conductivity_dc) #JAP added dc conductivity
+            grpc_p = create_group(grpc, "conductivity_dc")
+            grpc_p["NumMoments"] = [Int32(s.settings.num_moments)]
+            grpc_p["NumPoints"] = [Int32(s.settings.num_points)]
+            grpc_p["NumRandoms"] = [Int32(s.settings.num_random)]
+            grpc_p["NumDisorder"] = [Int32(s.settings.num_disorder)] 
+            grpc_p["Temperature"] =  [s.temperature/energy_scale] # KPM rescaled
+            grpc_p["Direction"] = [Int(s.direction)]
+
+        elseif isa(s, Singleshot_conductivity_dc) #JAP added singleshot dc conductivity NOT TESTED
+            grpc_p = create_group(grpc, "singleshot_conductivity_dc")
+            grpc_p["NumMoments"] = [Int32(s.settings.num_moments)]
+            grpc_p["NumRandoms"] = [Int32(s.settings.num_random)]
+            grpc_p["NumDisorder"] = [Int32(s.settings.num_disorder)] 
+            grpc_p["Temperature"] =  [s.temperature/energy_scale] # KPM rescaled
+            grpc_p["Energy"] =  [s.energy/energy_scale] # KPM rescaled #JAP missing energy shift!!
+            grpc_p["Direction"] = [Int(s.direction)]
+#JAP missing LDOS, ARPES and WAVE_PACKET
         else nothing end
     end
     close(f)
