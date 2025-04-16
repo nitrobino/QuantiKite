@@ -211,20 +211,23 @@ arpes(settings::KPM_precision, k_vector, weight) = Arpes(settings,  k_vector, we
 
 struct Conductivity_dc
     settings::KPM_precision
-    direction::String
+    direction::Int #JAP changed to Int to be coherent with KITE
     temperature::Float64
 end
 
 
-conductivity_dc(config::Configuration, num_points, num_moments, num_random, num_disorder, direction, temperature = 0.0) = 
+conductivity_dc(config::Configuration; num_points, num_moments, num_random, num_disorder, direction, temperature = 0.0) = 
     conductivity_dc(KPM_precision(num_points, num_moments, num_random, num_disorder), direction, temperature)
 
-function conductivity_dc(settings::KPM_precision, direction, temperature) 
+function conductivity_dc(settings::KPM_precision, direction, temperature)  #JAP changed code to be equal to conductivity_optical
     avail_dirs = Dict("xx" => 0, "yy" => 1, "zz" => 2, "xy" => 3, "xz" => 4, "yx" => 5, "yz" => 6, "zx" => 7, "zy" => 8)
-    if direction ∈ keys(avail_dirs) == false
+    dir = -1
+    if haskey(avail_dirs, direction)
+        dir = avail_dirs[direction]
+    else
         throw(ArgumentError("$(direction) is not in the list of available methods: $(keys(avail_dirs))"))
-    else nothing end
-    return Conductivity_dc(settings, direction, temperature)
+    end
+    return Conductivity_dc(settings, dir, temperature)
 end
 
 """

@@ -70,7 +70,6 @@ function h5gen(h::Quantica.Hamiltonian, c::Configuration, ss::T, modification = 
     # this bandwidth is an approximation to the larger system
     vectors = h.lattice.bravais.matrix' # bravais vectors
     space_size = size(vectors,1)        # system dimension
-    #print(h.lattice.unitcell.sites)
     position = site_positions(h)        # orbital positions (degenerate)
     orb_from, orb_to, values = hdf5_rearrangefunction(h, energy_scale, energy_shift, space_size)
     ts, ds, num_hoppings_orbital = matrix_elements_and_distances(orb_from, orb_to, values)       
@@ -89,7 +88,6 @@ function h5gen(h::Quantica.Hamiltonian, c::Configuration, ss::T, modification = 
     f["Divisions"] = [UInt32(x) for x in c.divisions]
     f["DIM"] = UInt32(space_size) # space dimension of the lattice 1D, 2D, 3D
     f["LattVectors"] = vectors.parent
-    #print(Matrix(hcat(position...)))
     f["OrbPositions"] = Matrix(hcat(position...)) 
     #f["NOrbitals"] = UInt32(sum(Quantica.norbitals(h)))
     f["NOrbitals"] = UInt32(get_num_orbitals(h)) #JAP this gets the total num of orbitals and not just sublattices 
@@ -221,13 +219,8 @@ function site_positions(h) # site positions for each orbital in the TB matrix
     positions = []
     position_atoms = h.lattice.unitcell.sites
     num_orbitals = Quantica.norbitals(h,:) # vector of num_orbitals at site i JAP norbitals has now two methods pertaining hamiltonians in newer Quantica versions. putting the : gets the vector with the n of orbitals. without the collon it only gives the size of the vector. 
-    print("\n")
-    print(Quantica.norbitals(h,:))
-    print("\n")
     num_sites = length(position_atoms)
     num_sublat = length(num_orbitals)
-    print(num_sublat)
-    print("\n")
     chunks = Iterators.partition(1:num_sites,div(num_sites,num_sublat))
     for (sublat_ind,chunk) in enumerate(chunks)
         for i in chunk
