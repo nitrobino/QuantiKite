@@ -52,9 +52,17 @@ calculation.
 See: `Configuration`, `Methods`
 """
 function h5gen(h::Quantica.Hamiltonian, c::Configuration, s::T, modification = false;
-     kws...) where {T<:Methods}
+        kws...)  where {T <: Methods} #JAP if s is an instance of a Method, call h5gen with it in an array 
+
+    h5gen(h, c, [s], modification;kws...)
+end
+
+#JAP ss is now an array of Methods to support different methods in same hdf5 file
+function h5gen(h::Quantica.Hamiltonian, c::Configuration, ss::T, modification = false;
+        kws...)  where {T <: AbstractArray} #JAP ss is an array of methods
+
     # reads the type of h or promote it to complex if needed #0 real, #1 complex
-    complx = real_or_complex(h, s) 
+    complx = real_or_complex(h, ss) 
     # sets the precision of the calculation using complx type and the `precision` field in c
     precision = set_prec(complx, c.precision) 
     # energy rescaling for KPM computations.
@@ -62,6 +70,7 @@ function h5gen(h::Quantica.Hamiltonian, c::Configuration, s::T, modification = f
     # this bandwidth is an approximation to the larger system
     vectors = h.lattice.bravais.matrix' # bravais vectors
     space_size = size(vectors,1)        # system dimension
+    #print(h.lattice.unitcell.sites)
     position = site_positions(h)        # orbital positions (degenerate)
     orb_from, orb_to, values = hdf5_rearrangefunction(h, energy_scale, energy_shift, space_size)
     ts, ds, num_hoppings_orbital = matrix_elements_and_distances(orb_from, orb_to, values)       
@@ -80,6 +89,7 @@ function h5gen(h::Quantica.Hamiltonian, c::Configuration, s::T, modification = f
     f["Divisions"] = [UInt32(x) for x in c.divisions]
     f["DIM"] = UInt32(space_size) # space dimension of the lattice 1D, 2D, 3D
     f["LattVectors"] = vectors.parent
+    #print(Matrix(hcat(position...)))
     f["OrbPositions"] = Matrix(hcat(position...)) 
     #f["NOrbitals"] = UInt32(sum(Quantica.norbitals(h)))
     f["NOrbitals"] = UInt32(get_num_orbitals(h)) #JAP this gets the total num of orbitals and not just sublattices 
@@ -113,56 +123,59 @@ function h5gen(h::Quantica.Hamiltonian, c::Configuration, s::T, modification = f
     write(dset, zeros(Float64, 0, 1))
     dset = create_dataset(grp_dis, "OrbitalNum", datatype, (1,0))
     write(dset, zeros(Float64, 0, 1))
-    
+
     #---------------------------------------------------------------------------- CALCULATION GROUP
     grpc = create_group(f, "Calculation")
-    
-    if isa(s, Dos)
-        grpc_p = create_group(grpc, "dos")
-        grpc_p["NumMoments"] = [Int32(s.settings.num_moments)]
-        grpc_p["NumPoints"] = [Int32(s.settings.num_points)]
-        grpc_p["NumRandoms"] = [Int32(s.settings.num_random)]
-        grpc_p["NumDisorder"] = [Int32(s.settings.num_disorder)] 
-    
-    elseif isa(s, Conductivity_optical)
-        grpc_p = create_group(grpc, "conductivity_optical")
-        grpc_p["NumMoments"] = [Int32(s.settings.num_moments)]
-        grpc_p["NumPoints"] = [Int32(s.settings.num_points)]
-        grpc_p["NumRandoms"] = [Int32(s.settings.num_random)]
-        grpc_p["NumDisorder"] = [Int32(s.settings.num_disorder)] 
-        grpc_p["Temperature"] =  [s.temperature/energy_scale] # KPM rescaled
-        grpc_p["Direction"] = [Int(s.direction)]
+   for s in ss  
+        if isa(s, Dos)
+            grpc_p = create_group(grpc, "dos")
+            grpc_p["NumMoments"] = [Int32(s.settings.num_moments)]
+            grpc_p["NumPoints"] = [Int32(s.settings.num_points)]
+            grpc_p["NumRandoms"] = [Int32(s.settings.num_random)]
+            grpc_p["NumDisorder"] = [Int32(s.settings.num_disorder)] 
+        
+        elseif isa(s, Conductivity_optical)
+            grpc_p = create_group(grpc, "conductivity_optical")
+            grpc_p["NumMoments"] = [Int32(s.settings.num_moments)]
+            grpc_p["NumPoints"] = [Int32(s.settings.num_points)]
+            grpc_p["NumRandoms"] = [Int32(s.settings.num_random)]
+            grpc_p["NumDisorder"] = [Int32(s.settings.num_disorder)] 
+            grpc_p["Temperature"] =  [s.temperature/energy_scale] # KPM rescaled
+            grpc_p["Direction"] = [Int(s.direction)]
 
-    elseif isa(s, Conductivity_optical_non_linear)
-        grpc_p = create_group(grpc, "conductivity_optical_nonlinear")
-        grpc_p["NumMoments"] = [Int32(s.settings.num_moments)]
-        grpc_p["NumPoints"] = [Int32(s.settings.num_points)]
-        grpc_p["NumRandoms"] = [Int32(s.settings.num_random)]
-        grpc_p["NumDisorder"] = [Int32(s.settings.num_disorder)] 
-        grpc_p["Temperature"] =  [s.temperature/energy_scale] # KPM rescaled
-        grpc_p["Direction"] = [Int(s.direction)]
-        grpc_p["Special"] = [Int(s.special)]
-    else nothing end
+        elseif isa(s, Conductivity_optical_non_linear)
+            grpc_p = create_group(grpc, "conductivity_optical_nonlinear")
+            grpc_p["NumMoments"] = [Int32(s.settings.num_moments)]
+            grpc_p["NumPoints"] = [Int32(s.settings.num_points)]
+            grpc_p["NumRandoms"] = [Int32(s.settings.num_random)]
+            grpc_p["NumDisorder"] = [Int32(s.settings.num_disorder)] 
+            grpc_p["Temperature"] =  [s.temperature/energy_scale] # KPM rescaled
+            grpc_p["Direction"] = [Int(s.direction)]
+            grpc_p["Special"] = [Int(s.special)]
+        else nothing end
+    end
     close(f)
     println("A .h5 file has been generated")
 end
 
-function real_or_complex(h, s::T) where {T<:Methods} 
+function real_or_complex(h, ss::T) where {T<:AbstractArray} #JAP added AbstractArray for same reason as above
     hamtype = eltype(h.harmonics[1].h.flat)
     if hamtype ∈ [ComplexF16, ComplexF32, ComplexF64]  
         complx = 1
     else
         complx = 0
     end
-    if isa(s, Arpes) && complx == 0
-        print("ARPES is requested but is_complex identifier is 0.
-            Automatically turning is_complex to 1!")
-        complx = 1
-    elseif isa(s ,Gaussian_wave_packet) && complx == 0
-        print("Wavepacket is requested but is_complex identifier is 0. 
-            Automatically turning is_complex to 1!")
-        complx = 1
-    else nothing end
+    for s in ss
+        if isa(s, Arpes) && complx == 0
+            print("ARPES is requested but is_complex identifier is 0.
+                Automatically turning is_complex to 1!")
+            complx = 1
+        elseif isa(s ,Gaussian_wave_packet) && complx == 0
+            print("Wavepacket is requested but is_complex identifier is 0. 
+                Automatically turning is_complex to 1!")
+            complx = 1
+        else nothing end
+    end
     return complx # if hamiltonian is complex complx = 1 else complx = 0
 end
 
@@ -188,9 +201,14 @@ function site_positions(h) # site positions for each orbital in the TB matrix
     # it accepts systems with different orbitals at different sites
     positions = []
     position_atoms = h.lattice.unitcell.sites
-    num_orbitals = Quantica.norbitals(h) # vector of num_orbitals at site i
+    num_orbitals = Quantica.norbitals(h,:) # vector of num_orbitals at site i JAP norbitals has now two methods pertaining hamiltonians in newer Quantica versions. putting the : gets the vector with the n of orbitals. without the collon it only gives the size of the vector. 
+    print("\n")
+    print(Quantica.norbitals(h,:))
+    print("\n")
     num_sites = length(position_atoms)
     num_sublat = length(num_orbitals)
+    print(num_sublat)
+    print("\n")
     chunks = Iterators.partition(1:num_sites,div(num_sites,num_sublat))
     for (sublat_ind,chunk) in enumerate(chunks)
         for i in chunk
